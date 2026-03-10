@@ -1,0 +1,14 @@
+# Hash Cracker Tool — Requirements
+# No external dependencies required!
+# Uses Python standard library only:
+#   - hashlib   (MD5, SHA-1, SHA-2 family)
+#   - itertools (brute-force combinations)
+#   - argparse  (CLI argument parsing)
+#   - string    (character set constants)
+#   - time      (elapsed time tracking)
+#   - os        (file path checks)
+#   - sys       (system utilities)
+#   - pathlib   (modern path handling)
+
+# Python 3.7+ required
+# python >= 3.7
