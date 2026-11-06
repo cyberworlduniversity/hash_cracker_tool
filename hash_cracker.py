@@ -17,6 +17,7 @@ import sys
 import os
 import argparse
 from pathlib import Path
+import re
 
 
 # ─────────────────────────────────────────────
@@ -24,17 +25,23 @@ from pathlib import Path
 # ─────────────────────────────────────────────
 
 HASH_LENGTHS = {
-    32:  "MD5",
-    40:  "SHA-1",
-    56:  "SHA-224",
-    64:  "SHA-256",
-    96:  "SHA-384",
-    128: "SHA-512",
+    32: "MD5", 40: "SHA-1", 56: "SHA-224",
+    64: "SHA-256", 96: "SHA-384", 128: "SHA-512",
 }
+SUPPORTED_ALGORITHMS = {
+    "md5": 32, "sha1": 40, "sha224": 56,
+    "sha256": 64, "sha384": 96, "sha512": 128,
+}
+MAX_WORDLIST_BYTES = 100 * 1024 * 1024
+MAX_DICTIONARY_ATTEMPTS = 5_000_000
+MAX_BRUTE_FORCE_ATTEMPTS = 5_000_000
+MAX_HASH_BATCH_ENTRIES = 100_000
 
 def identify_hash(hash_str: str) -> str:
     """Identify the hash algorithm based on hash length."""
     h = hash_str.strip().lower()
+    if not re.fullmatch(r"[0-9a-f]+", h):
+        return "Unknown (invalid hexadecimal digest)"
     length = len(h)
     return HASH_LENGTHS.get(length, f"Unknown (length={length})")
 
@@ -57,6 +64,8 @@ def compute_hash(plaintext: str, algorithm: str) -> str:
     str – Hex-encoded digest
     """
     algo = algorithm.lower().replace("-", "")
+    if algo not in SUPPORTED_ALGORITHMS:
+        raise ValueError(f"Unsupported hash algorithm: {algorithm}")
     encodings = ["utf-8", "latin-1"]
     for enc in encodings:
         try:
@@ -73,15 +82,14 @@ def compute_hash(plaintext: str, algorithm: str) -> str:
 
 def detect_algorithm(hash_str: str) -> str:
     """Map a hash string to its most likely hashlib algorithm name."""
-    mapping = {
-        32:  "md5",
-        40:  "sha1",
-        56:  "sha224",
-        64:  "sha256",
-        96:  "sha384",
-        128: "sha512",
-    }
-    return mapping.get(len(hash_str.strip()), "md5")
+    normalized = hash_str.strip().lower()
+    if not re.fullmatch(r"[0-9a-f]+", normalized):
+        raise ValueError("Hash must contain only hexadecimal characters.")
+    algo = next((name for name, length in SUPPORTED_ALGORITHMS.items()
+                 if length == len(normalized)), None)
+    if algo is None:
+        raise ValueError("Hash length does not match a supported algorithm.")
+    return algo
 
 
 # ─────────────────────────────────────────────
@@ -111,11 +119,18 @@ def dictionary_attack(target_hash: str, wordlist_path: str,
     -------
     dict with keys: success, password, attempts, elapsed, algorithm
     """
-    target = target_hash.strip().lower()
-    if algorithm == "auto":
-        algorithm = detect_algorithm(target)
+    try:
+        target = target_hash.strip().lower()
+        algorithm = detect_algorithm(target) if algorithm == "auto" else algorithm.lower().replace("-", "")
+        if algorithm not in SUPPORTED_ALGORITHMS:
+            raise ValueError("Unsupported hash algorithm.")
+        if not re.fullmatch(r"[0-9a-f]+", target) or len(target) != SUPPORTED_ALGORITHMS[algorithm]:
+            raise ValueError("Target hash is not a valid digest for the selected algorithm.")
+    except ValueError as exc:
+        return {"success": False, "password": None, "attempts": 0, "elapsed": 0,
+                "algorithm": algorithm, "error": str(exc)}
 
-    if not os.path.exists(wordlist_path):
+    if not os.path.isfile(wordlist_path):
         return {
             "success": False,
             "password": None,
@@ -124,6 +139,10 @@ def dictionary_attack(target_hash: str, wordlist_path: str,
             "algorithm": algorithm,
             "error": f"Wordlist not found: {wordlist_path}"
         }
+
+    if os.path.getsize(wordlist_path) > MAX_WORDLIST_BYTES:
+        return {"success": False, "password": None, "attempts": 0, "elapsed": 0,
+                "algorithm": algorithm, "error": "Wordlist exceeds the 100 MiB safety limit."}
 
     start = time.time()
     attempts = 0
@@ -138,9 +157,15 @@ def dictionary_attack(target_hash: str, wordlist_path: str,
         with open(wordlist_path, "r", encoding="utf-8", errors="ignore") as f:
             for line in f:
                 word = line.rstrip("\n\r")
+                if len(word) > 1024:
+                    continue
                 candidates = [word, word.lower(), word.upper(),
                               word.capitalize(), word.strip()]
                 for candidate in candidates:
+                    if attempts >= MAX_DICTIONARY_ATTEMPTS:
+                        return {"success": False, "password": None, "attempts": attempts,
+                                "elapsed": time.time() - start, "algorithm": algorithm,
+                                "error": "Dictionary attempt safety limit reached."}
                     attempts += 1
                     if compute_hash(candidate, algorithm) == target:
                         elapsed = time.time() - start
@@ -181,7 +206,7 @@ def dictionary_attack(target_hash: str, wordlist_path: str,
 def brute_force_attack(target_hash: str, algorithm: str = "auto",
                        charset: str = "lowercase",
                        min_length: int = 1,
-                       max_length: int = 6) -> dict:
+                       max_length: int = 4) -> dict:
     """
     Attempt to crack a hash using brute-force (exhaustive) search.
 
@@ -213,10 +238,29 @@ def brute_force_attack(target_hash: str, algorithm: str = "auto",
         "all":          string.ascii_letters + string.digits + string.punctuation,
     }
 
-    chars = CHARSETS.get(charset, string.ascii_lowercase)
-    target = target_hash.strip().lower()
-    if algorithm == "auto":
-        algorithm = detect_algorithm(target)
+    if charset not in CHARSETS:
+        return {"success": False, "password": None, "attempts": 0, "elapsed": 0,
+                "algorithm": algorithm, "error": "Unsupported character set."}
+    if min_length < 1 or max_length < min_length or max_length > 6:
+        return {"success": False, "password": None, "attempts": 0, "elapsed": 0,
+                "algorithm": algorithm, "error": "Length range must satisfy 1 <= min <= max <= 6."}
+    chars = CHARSETS[charset]
+    try:
+        target = target_hash.strip().lower()
+        algorithm = detect_algorithm(target) if algorithm == "auto" else algorithm.lower().replace("-", "")
+        if algorithm not in SUPPORTED_ALGORITHMS:
+            raise ValueError("Unsupported hash algorithm.")
+        if not re.fullmatch(r"[0-9a-f]+", target) or len(target) != SUPPORTED_ALGORITHMS[algorithm]:
+            raise ValueError("Target hash is not a valid digest for the selected algorithm.")
+    except ValueError as exc:
+        return {"success": False, "password": None, "attempts": 0, "elapsed": 0,
+                "algorithm": algorithm, "error": str(exc)}
+
+    estimated_attempts = sum(len(chars) ** length for length in range(min_length, max_length + 1))
+    if estimated_attempts > MAX_BRUTE_FORCE_ATTEMPTS:
+        return {"success": False, "password": None, "attempts": 0, "elapsed": 0,
+                "algorithm": algorithm,
+                "error": f"Search would exceed the {MAX_BRUTE_FORCE_ATTEMPTS:,}-candidate safety limit."}
 
     start = time.time()
     attempts = 0
@@ -394,7 +438,7 @@ Examples:
                     choices=["lowercase","uppercase","digits","alphanumeric","all"],
                     help="Character set (default: lowercase)")
     bf.add_argument("--min-len", type=int, default=1, help="Min password length")
-    bf.add_argument("--max-len", type=int, default=6, help="Max password length")
+    bf.add_argument("--max-len", type=int, default=4, help="Max password length (safety limit: 6)")
 
     # batch
     bt = sub.add_parser("batch", help="Crack multiple hashes from a file")
