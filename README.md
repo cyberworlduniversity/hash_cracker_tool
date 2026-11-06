@@ -13,7 +13,8 @@ cd hash_cracker_tool
 > **Educational Use Only** — This tool is designed for learning about cryptographic hashing, password security, and ethical cybersecurity concepts. Only use it on hashes you own or have explicit permission to test.
 
 ---
-\n## 📖 Table of Contents
+
+## 📖 Table of Contents
 
 1. [What Is a Hash?](#what-is-a-hash)
 2. [Definitions & Key Concepts](#definitions--key-concepts)
