@@ -401,3 +401,55 @@ hash_cracker/
 ---
 
 *Happy learning! 🔐 Stay ethical, stay curious.*
+
+
+## Repository Quick Start
+
+Clone this repository and enter its directory:
+
+```bash
+git clone https://github.com/cyberworlduniversity/hash_cracker_tool.git
+cd hash_cracker_tool
+```
+
+### Requirements and installation
+
+- Python 3.10+ is recommended.
+- Create an isolated environment and install the pinned project dependencies:
+
+```bash
+python -m venv .venv
+# Linux/macOS: source .venv/bin/activate
+# Windows PowerShell: .venv\\Scripts\\Activate.ps1
+python -m pip install -r requirements.txt
+```
+
+### Run
+
+```bash
+python hash_cracker.py
+```
+
+If the program presents command-line options, run `python hash_cracker.py --help` to view the options supported by the current version. Use a test target or sample input first.
+
+### Validate the source
+
+```bash
+python -m compileall -q .
+```
+
+Use only for password-recovery exercises and hashes you own or have explicit permission to audit.
+
+### Program flow
+
+```mermaid
+flowchart TD
+    A[Start] --> B[Load configuration and input]
+    B --> C{Input valid?}
+    C -- No --> D[Show usage or validation error]
+    C -- Yes --> E[Run hash cracker tool analysis]
+    E --> F[Collect findings]
+    F --> G[Display or save results]
+    G --> H[Exit]
+    D --> H
+```
