@@ -1,10 +1,19 @@
 # 🔓 Hash Cracker Tool
 
+
+## Get this repository
+
+Clone the current project (this repository's canonical GitHub URL), then follow the installation and usage steps below.
+
+```bash
+git clone https://github.com/cyberworlduniversity/hash_cracker_tool.git
+cd hash_cracker_tool
+```
+
 > **Educational Use Only** — This tool is designed for learning about cryptographic hashing, password security, and ethical cybersecurity concepts. Only use it on hashes you own or have explicit permission to test.
 
 ---
-
-## 📖 Table of Contents
+\n## 📖 Table of Contents
 
 1. [What Is a Hash?](#what-is-a-hash)
 2. [Definitions & Key Concepts](#definitions--key-concepts)
@@ -234,8 +243,8 @@ This tool is structured as a **step-by-step learning journey** from concept to i
 ### Setup
 ```bash
 # Clone or download the files
-git clone <repository>
-cd hash_cracker
+git clone https://github.com/cyberworlduniversity/hash_cracker_tool.git
+cd hash_cracker_tool
 
 # No installation needed — Python built-ins only
 # Optional: make executable
