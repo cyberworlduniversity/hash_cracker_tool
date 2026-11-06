@@ -24,7 +24,7 @@ class HashCrackerInputSafetyTests(unittest.TestCase):
     def test_dictionary_attack_rejects_mismatched_hash(self):
         result = hash_cracker.dictionary_attack("z" * 32, "missing.txt", "md5")
         self.assertFalse(result["success"])
-        self.assertIn("hexadecimal", result["error"])
+        self.assertIn("valid digest", result["error"])
 
     def test_brute_force_rejects_excessive_length_and_invalid_charset(self):
         result = hash_cracker.brute_force_attack("5f4dcc3b5aa765d61d8327deb882cf99",
